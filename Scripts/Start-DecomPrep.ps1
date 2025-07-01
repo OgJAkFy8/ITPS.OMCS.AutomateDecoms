@@ -27,8 +27,21 @@ param(
 # Get all VMs matching the input name
 $vms = Get-VM -Name "*$VMName*" -ErrorAction SilentlyContinue
 if (-not $vms) {
-    Write-Error "No VMs found matching '$VMName'."
-    return $null
+    if (-not $TenantFolder) {
+        $TenantFolder = Read-Host "No VMs found matching '$VMName'. Please enter the Tenant Folder for more accurate search (or leave blank to cancel)"
+        if (-not $TenantFolder) {
+            Write-Host "Operation cancelled."
+            return $null
+        }
+        $vms = Get-VM -Name "*$VMName*" -Location $TenantFolder -ErrorAction SilentlyContinue
+        if (-not $vms) {
+            Write-Error "No VMs found matching '$VMName' in folder '$TenantFolder'."
+            return $null
+        }
+    } else {
+        Write-Error "No VMs found matching '$VMName'."
+        return $null
+    }
 }
 
 # Build a list with folder paths
@@ -51,7 +64,7 @@ foreach ($vm in $vms) {
 
 # If more than one VM, prompt user to select
 if ($vmList.Count -gt 1) {
-    Write-Host "\nMatching VMs:" -ForegroundColor Cyan
+    Write-Host "`nMatching VMs:" -ForegroundColor Cyan
     for ($i = 0; $i -lt $vmList.Count; $i++) {
         $vm = $vmList[$i]
         Write-Host ("[{0}] Name: {1} | PowerState: {2} | Folder: {3}" -f ($i+1), $vm.Name, $vm.PowerState, $vm.FolderPath)

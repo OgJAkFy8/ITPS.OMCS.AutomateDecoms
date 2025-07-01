@@ -1,0 +1,25 @@
+{
+    // PowerShell: Run all scripts in the repo
+    "version": "2.0",
+    "tasks": [
+        {
+            "label": "Run PowerShell Script",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoLogo",
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", "${file}"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always"
+            }
+        }
+    ]
+}

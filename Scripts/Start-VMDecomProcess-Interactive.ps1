@@ -46,12 +46,6 @@
 
  
 
-    .PARAMETER TenantFolder
-
-    The expected folder path for validation (optional, but recommended for safety).
-
- 
-
     .PARAMETER TicketNumber
 
     The ticket or change number for tracking and export/log file naming.
@@ -91,8 +85,6 @@ param(
   [Parameter(Mandatory)]
 
   [string]$VMName,           # The (partial or full) name of the VM to decommission
-
-  [string]$TenantFolder,     # The expected folder path for validation (optional)
 
   [String]$TicketNumber      # The ticket or change number for tracking and export/log file naming
 
@@ -157,16 +149,6 @@ if (-not $foundVC)
 }
 
 #>
-
-# Get tenant folder
-
-if (-not $TenantFolder){
-
-    $TenantFolder = Read-Host 'Tenant Folder'
-
-}
-
- 
 
 # Get all VMs matching the input name (wildcard search)
 
@@ -484,9 +466,7 @@ function Invoke-VMProcess
 
   param(
 
-    [string]$VMName,
-
-    [string]$TenantFolder
+    [string]$VMName
 
     )
 
@@ -513,36 +493,6 @@ function Invoke-VMProcess
     Write-Host ("VM is already in the '_DECOM' folder. Skipping VM: {0}" -f $VMName)
 
     $TasksCompleted += 'Already in _DECOM folder'
-
-    return $null
-
-  }
-
-  $tenantFolderObj = Get-FolderByPath -Path $TenantFolder -ViServer $vmInfo.ViServer
-
-  if (-not $tenantFolderObj)
-
-  {
-
-    Write-Host ('Could not find folder path: {0}. Skipping VM: {1}' -f $TenantFolder, $VMName)
-
-    $TasksCompleted += 'Tenant folder not found'
-
-    return $null
-
-  }
-
-  $vmFolderId = [String]$vm.FolderId
-
-  $tenantFolderId = [String]$tenantFolderObj.Id
-
-  if ($vmFolderId -ne $tenantFolderId)
-
-  {
-
-    Write-Host ('VM {1} is not in the specified Folder {0}. Skipping VM.' -f $TenantFolder, $VMName)
-
-    $TasksCompleted += 'Not in specified folder'
 
     return $null
 
@@ -944,7 +894,7 @@ Write-DecomLog -Message ("Folder Path: {0}" -f $tenantFolderObj)
 
 # Run the decommissioning process and log each step
 
-$result = Invoke-VMProcess -VMName $selectedVM.Name #-TenantFolder $TenantFolder
+$result = Invoke-VMProcess -VMName $selectedVM.Name
 
 if ($result)
 
@@ -973,4 +923,3 @@ if ($result)
 }
 
 
- 

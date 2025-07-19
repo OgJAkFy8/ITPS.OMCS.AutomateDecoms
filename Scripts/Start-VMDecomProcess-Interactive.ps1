@@ -16,8 +16,6 @@
 
     - Prompts the user to select the correct VM from a numbered list (or cancels if desired).
 
-    - Validates the VM's folder location and tenant folder before proceeding.
-
     - Exports all VM properties to a JSON file for backup/reference, named with the VM and ticket number.
 
     - Runs a step-by-step decommissioning process for the selected VM, including:
@@ -64,7 +62,7 @@
 
     - Requires VMware PowerCLI and Active Directory modules.
 
-    - Script is idempotent: will skip VMs already in _DECOM or not in the specified folder.
+    - Script is idempotent: will skip VMs already in _DECOM.
 
     - For questions or improvements, see script comments and contact the author.
 
@@ -116,39 +114,6 @@ switch ($vcShort)
 
 }
 
-<#
-
-Replaced by above: 7-18-2025
-
-$connectedVCs = $global:DefaultVIServers      # Get all currently connected vCenter servers
-
-$foundVC = $null                  # Initialize variable to store the matching vCenter
-
-foreach ($vc in $connectedVCs)
-
-{
-
-  if (($vc.Name).Tolower() -like "$vcShort*") # Wildcard match: does vCenter name start with the VM prefix?
-
-  {
-
-    $foundVC = $vc
-
-    break
-
-  }
-
-}
-
-if (-not $foundVC)
-
-{
-
-    ..\..\Scripts\ConnectTo-vCenter.ps1
-
-}
-
-#>
 
 # Get all VMs matching the input name (wildcard search)
 
@@ -672,8 +637,6 @@ function Invoke-VMProcess
 
     OperatingSystem = ($vmInfo.Guest -split(':'))[1]
 
-    TenantFolder   = $vmInfo.Folder
-
     ADStatus       = $VMFQDNIPandADStatus.ADStatus
 
     NumCPU         = $vmInfo.NumCPU
@@ -887,8 +850,6 @@ Write-DecomLog -Message ("IP Address: {0}" -f $vmInfo.IPAddress)
 Write-DecomLog -Message ("Operating System: {0}" -f $osType)
 
 Write-DecomLog -Message ("Parent Folder: {0}" -f $parentFolder)
-
-Write-DecomLog -Message ("Folder Path: {0}" -f $tenantFolderObj)
 
  
 

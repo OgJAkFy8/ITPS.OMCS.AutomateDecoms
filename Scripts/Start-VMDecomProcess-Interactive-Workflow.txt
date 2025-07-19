@@ -1,0 +1,60 @@
+Interactive VM Decommissioning Workflow (ASCII)
+
+Start: User runs script
+  |
+  v
+Prompt for VMName and TicketNumber
+  |
+  v
+Connect to vCenter
+  |
+  v
+Search for matching VMs
+  |
+  v
+Are VMs found?
+  |-- No --> Exit: No VMs found
+  |
+  v
+Display VM list
+  |
+  v
+Are there multiple VMs?
+  |-- Yes --> Prompt user to select VM
+  |-- No --> Auto-select single VM
+  |
+  v
+Selected VM
+  |
+  v
+Display VM info
+  |
+  v
+Prompt for NOC/Change info if needed
+  |
+  v
+Log info
+  |
+  v
+Run decommission steps
+  |
+  v
+Shutdown VM
+  |
+  v
+NIC disconnect
+  |
+  v
+Move to _DECOM folder
+  |
+  v
+Rename VM
+  |
+  v
+Log results
+  |
+  v
+Display summary
+  |
+  v
+End

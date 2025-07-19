@@ -66,7 +66,32 @@
 
     - For questions or improvements, see script comments and contact the author.
 
- 
+    .MERMAID
+    ```mermaid
+    flowchart TD
+        A[Start: User runs script] --> B[Prompt for VMName and TicketNumber]
+        B --> C{Connect to vCenter}
+        C --> D[Search for matching VMs]
+        D --> E{VMs found?}
+        E -- No --> F[Exit: No VMs found]
+        E -- Yes --> G[Display VM list]
+        G --> H{Multiple VMs?}
+        H -- Yes --> I[Prompt user to select VM]
+        H -- No --> J[Auto-select single VM]
+        I --> K[Selected VM]
+        J --> K[Selected VM]
+        K --> L[Display VM info]
+        L --> M[Prompt for NOC/Change info if needed]
+        M --> N[Log info]
+        N --> O[Run decommission steps]
+        O --> P[Shutdown VM]
+        P --> Q[NIC disconnect]
+        Q --> R[Move to _DECOM folder]
+        R --> S[Rename VM]
+        S --> T[Log results]
+        T --> U[Display summary]
+        U --> V[End]
+    ```
 
 #>
 
@@ -753,23 +778,7 @@ $logPath = Join-Path -Path $OutputPath -ChildPath ("$($selectedVM.Name)-$ticketS
 
  
 
-# Function: Write-DecomLog
-
-# Appends a timestamped message to the log file
-
-function Write-DecomLog
-
-{
-
-  param([string]$Message)
-
-  $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-
-  Add-Content -Path $logPath -Value ("[$timestamp] $Message")
-
-}
-
- 
+Import-Module ..\Modules\Logging-Module.psm1
 
 # Write log header with user, ticket, and NOC info
 
@@ -841,15 +850,7 @@ Write-Host ("Parent Folder: {0}" -f $parentFolder)
 
 # Log VM info
 
-Write-DecomLog -Message ("Server Name: {0}" -f $vmInfo.VMName)
-
-Write-DecomLog -Message ("New Name: {0}" -f $newname)
-
-Write-DecomLog -Message ("IP Address: {0}" -f $vmInfo.IPAddress)
-
-Write-DecomLog -Message ("Operating System: {0}" -f $osType)
-
-Write-DecomLog -Message ("Parent Folder: {0}" -f $parentFolder)
+Write-ServerLog -ServerName $vmInfo.VMName -Message "Decom VM: $($vmInfo.VMName) - IP: $($vmInfo.IPAddress) - OS: $osType"
 
  
 
@@ -873,11 +874,9 @@ if ($result)
 
   # Log each step in the TasksCompleted property (split on newlines)
 
-  foreach( $line in $result.TasksCompleted -split "`n")
+  foreach( $line in $result.TasksCompleted -split "`n") {
 
-  {
-
-    Write-DecomLog -Message $line
+    Write-ServerLog -ServerName $vmInfo.VMName -Message "Decom VM: $line"
 
   }
 

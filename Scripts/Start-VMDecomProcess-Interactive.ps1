@@ -14,7 +14,7 @@
 
     - Lists all VMs matching the input name, displaying their folder paths and power state.
 
-    - Prompts the user to select the correct VM from a numbered list (or cancels if desired).
+    - Prompts the user to select the correct VM from a numbered list (or cancels if desired), even if only one match is found (safety measure).
 
     - Exports all VM properties to a JSON file for backup/reference, named with the VM and ticket number.
 
@@ -64,6 +64,8 @@
 
     - Script is idempotent: will skip VMs already in _DECOM.
 
+    - User selection is always required, even for a single VM match, to prevent accidental decommissioning.
+
     - For questions or improvements, see script comments and contact the author.
 
     .MERMAID
@@ -75,22 +77,19 @@
         D --> E{VMs found?}
         E -- No --> F[Exit: No VMs found]
         E -- Yes --> G[Display VM list]
-        G --> H{Multiple VMs?}
-        H -- Yes --> I[Prompt user to select VM]
-        H -- No --> J[Auto-select single VM]
-        I --> K[Selected VM]
-        J --> K[Selected VM]
-        K --> L[Display VM info]
-        L --> M[Prompt for NOC/Change info if needed]
-        M --> N[Log info]
-        N --> O[Run decommission steps]
-        O --> P[Shutdown VM]
-        P --> Q[NIC disconnect]
-        Q --> R[Move to _DECOM folder]
-        R --> S[Rename VM]
-        S --> T[Log results]
-        T --> U[Display summary]
-        U --> V[End]
+        G --> H[Prompt user to select VM (always, even if only one)]
+        H --> I[Selected VM]
+        I --> J[Display VM info]
+        J --> K[Prompt for NOC/Change info if needed]
+        K --> L[Log info]
+        L --> M[Run decommission steps]
+        M --> N[Shutdown VM]
+        N --> O[NIC disconnect]
+        O --> P[Move to _DECOM folder]
+        P --> Q[Rename VM]
+        Q --> R[Log results]
+        R --> S[Display summary]
+        S --> T[End]
     ```
 
 #>
@@ -214,7 +213,7 @@ for ($i = 0; $i -lt $vmList.Count; $i++)
 
 # If more than one VM, prompt user to select the correct one
 
-if ($vmList.Count -gt 1)
+if ($vmList.Count -ge 1)
 
 {
 

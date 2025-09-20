@@ -14,6 +14,8 @@ function Write-ServerLog {
     }
     $logPath = Join-Path -Path $LogFolder -ChildPath ("$ServerName.log")
     $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
-    Add-Content -Path $logPath -Value ("[$timestamp] $Message")
+    $FullMessage = "[$timestamp] $ServerName :: $Message"
+    Write-Host $FullMessage
+    Add-Content -Path $logPath -Value $FullMessage
 }
 Export-ModuleMember -Function Write-ServerLog

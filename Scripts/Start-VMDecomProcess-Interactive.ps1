@@ -1,5 +1,7 @@
 <#
 
+ 
+
     .SYNOPSIS
 
     Interactive VM Decommissioning: select the correct VM from a numbered list, then process and display detailed results for each VM.
@@ -14,7 +16,9 @@
 
     - Lists all VMs matching the input name, displaying their folder paths and power state.
 
-    - Prompts the user to select the correct VM from a numbered list (or cancels if desired), even if only one match is found (safety measure).
+    - Prompts the user to select the correct VM from a numbered list (or cancels if desired).
+
+    - Validates the VM's folder location and tenant folder before proceeding.
 
     - Exports all VM properties to a JSON file for backup/reference, named with the VM and ticket number.
 
@@ -44,6 +48,12 @@
 
  
 
+    .PARAMETER TenantFolder
+
+    The expected folder path for validation (optional, but recommended for safety).
+
+ 
+
     .PARAMETER TicketNumber
 
     The ticket or change number for tracking and export/log file naming.
@@ -62,35 +72,11 @@
 
     - Requires VMware PowerCLI and Active Directory modules.
 
-    - Script is idempotent: will skip VMs already in _DECOM.
-
-    - User selection is always required, even for a single VM match, to prevent accidental decommissioning.
+    - Script is idempotent: will skip VMs already in _DECOM or not in the specified folder.
 
     - For questions or improvements, see script comments and contact the author.
 
-    .MERMAID
-    ```mermaid
-    flowchart TD
-        A[Start: User runs script] --> B[Prompt for VMName and TicketNumber]
-        B --> C{Connect to vCenter}
-        C --> D[Search for matching VMs]
-        D --> E{VMs found?}
-        E -- No --> F[Exit: No VMs found]
-        E -- Yes --> G[Display VM list]
-        G --> H[Prompt user to select VM (always, even if only one)]
-        H --> I[Selected VM]
-        I --> J[Display VM info]
-        J --> K[Prompt for NOC/Change info if needed]
-        K --> L[Log info]
-        L --> M[Run decommission steps]
-        M --> N[Shutdown VM]
-        N --> O[NIC disconnect]
-        O --> P[Move to _DECOM folder]
-        P --> Q[Rename VM]
-        Q --> R[Log results]
-        R --> S[Display summary]
-        S --> T[End]
-    ```
+ 
 
 #>
 
@@ -108,6 +94,8 @@ param(
 
   [string]$VMName,           # The (partial or full) name of the VM to decommission
 
+  [string]$TenantFolder,     # The expected folder path for validation (optional)
+
   [String]$TicketNumber      # The ticket or change number for tracking and export/log file naming
 
 )
@@ -118,26 +106,37 @@ param(
 
 $vcShort = ($VMName.Substring(0,6)).ToLower() # Get the first 6 characters of the VM name
 
-$null = Disconnect-VIServer * -Force -Confirm:$false -ErrorAction SilentlyContinue
+$connectedVCs = $global:DefaultVIServers      # Get all currently connected vCenter servers
 
- 
+$foundVC = $null                  # Initialize variable to store the matching vCenter
 
-switch ($vcShort)
+foreach ($vc in $connectedVCs)
 
 {
 
-    ' vCent1' {$null = Connect-VIServer -Server vCenter01 -Confirm:$false -ErrorAction SilentlyContinue}
+  if (($vc.Name).Tolower() -like "$vcShort*") # Wildcard match: does vCenter name start with the VM prefix?
 
-    ' vCent2' {$null = Connect-VIServer -Server vCenter02 -Confirm:$false -ErrorAction SilentlyContinue}
+  {
 
-    Default {
+    $foundVC = $vc
 
-        ..\..\Scripts\ConnectTo-vCenter.ps1
+    break
 
-        }
+  }
 
 }
 
+if (-not $foundVC)
+
+{
+
+    ..\..\Scripts\ConnectTo-vCenter.ps1
+
+}
+
+ 
+
+ 
 
 # Get all VMs matching the input name (wildcard search)
 
@@ -213,7 +212,7 @@ for ($i = 0; $i -lt $vmList.Count; $i++)
 
 # If more than one VM, prompt user to select the correct one
 
-if ($vmList.Count -ge 1)
+if ($vmList.Count -gt 1)
 
 {
 
@@ -453,13 +452,7 @@ function Invoke-VMProcess
 
 {
 
-  param(
-
-    [string]$VMName
-
-    )
-
- 
+  param([string]$VMName, [string]$TenantFolder)
 
   $AlreadyPoweredOff = $false
 
@@ -468,8 +461,6 @@ function Invoke-VMProcess
   $vmInfo = Get-VMInfo -VMName $VMName
 
   $vm = Get-VM -Name $VMName
-
-  #$TenantFolder = $vm.Folder
 
   $VMFQDNIPandADStatus = Get-VMFQDNIPandADStatus -VMName $VMName
 
@@ -482,6 +473,36 @@ function Invoke-VMProcess
     Write-Host ("VM is already in the '_DECOM' folder. Skipping VM: {0}" -f $VMName)
 
     $TasksCompleted += 'Already in _DECOM folder'
+
+    return $null
+
+  }
+
+  $tenantFolderObj = Get-FolderByPath -Path $TenantFolder -ViServer $vmInfo.ViServer
+
+  if (-not $tenantFolderObj)
+
+  {
+
+    Write-Host ('Could not find folder path: {0}. Skipping VM: {1}' -f $TenantFolder, $VMName)
+
+    $TasksCompleted += 'Tenant folder not found'
+
+    return $null
+
+  }
+
+  $vmFolderId = [String]$vm.FolderId
+
+  $tenantFolderId = [String]$tenantFolderObj.Id
+
+  if ($vmFolderId -ne $tenantFolderId)
+
+  {
+
+    Write-Host ('VM {1} is not in the specified Folder {0}. Skipping VM.' -f $TenantFolder, $VMName)
+
+    $TasksCompleted += 'Not in specified folder'
 
     return $null
 
@@ -661,6 +682,8 @@ function Invoke-VMProcess
 
     OperatingSystem = ($vmInfo.Guest -split(':'))[1]
 
+    TenantFolder   = $vmInfo.Folder
+
     ADStatus       = $VMFQDNIPandADStatus.ADStatus
 
     NumCPU         = $vmInfo.NumCPU
@@ -777,7 +800,23 @@ $logPath = Join-Path -Path $OutputPath -ChildPath ("$($selectedVM.Name)-$ticketS
 
  
 
-Import-Module ..\Modules\Logging-Module.psm1
+# Function: Write-DecomLog
+
+# Appends a timestamped message to the log file
+
+function Write-DecomLog
+
+{
+
+  param([string]$Message)
+
+  $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+
+  Add-Content -Path $logPath -Value ("[$timestamp] $Message")
+
+}
+
+ 
 
 # Write log header with user, ticket, and NOC info
 
@@ -849,13 +888,23 @@ Write-Host ("Parent Folder: {0}" -f $parentFolder)
 
 # Log VM info
 
-Write-ServerLog -ServerName $vmInfo.VMName -Message "Decom VM: $($vmInfo.VMName) - IP: $($vmInfo.IPAddress) - OS: $osType"
+Write-DecomLog -Message ("Server Name: {0}" -f $vmInfo.VMName)
+
+Write-DecomLog -Message ("New Name: {0}" -f $newname)
+
+Write-DecomLog -Message ("IP Address: {0}" -f $vmInfo.IPAddress)
+
+Write-DecomLog -Message ("Operating System: {0}" -f $osType)
+
+Write-DecomLog -Message ("Parent Folder: {0}" -f $parentFolder)
+
+Write-DecomLog -Message ("Folder Path: {0}" -f $tenantFolderObj)
 
  
 
 # Run the decommissioning process and log each step
 
-$result = Invoke-VMProcess -VMName $selectedVM.Name
+$result = Invoke-VMProcess -VMName $selectedVM.Name -TenantFolder $TenantFolder
 
 if ($result)
 
@@ -873,12 +922,13 @@ if ($result)
 
   # Log each step in the TasksCompleted property (split on newlines)
 
-  foreach( $line in $result.TasksCompleted -split "`n") {
+  foreach( $line in $result.TasksCompleted -split "`n")
 
-    Write-ServerLog -ServerName $vmInfo.VMName -Message "Decom VM: $line"
+  {
+
+    Write-DecomLog -Message $line
 
   }
 
 }
-
 

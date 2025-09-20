@@ -27,7 +27,7 @@ if (-not $PrepObject -or -not $PrepObject.VMObject) {
 
 $vm = $PrepObject.VMObject
 $vmName = $PrepObject.VMName
-$logPath = Join-Path -Path (Get-Location) -ChildPath ("$($vmName)-$TicketNumber-VMDecom.log")
+$logPath = Join-Path -Path (Get-Location) -ChildPath ("$TicketNumber-VMDecom.log")
 
 function Write-DecomLog {
     param([string]$Message)
@@ -38,6 +38,7 @@ function Write-DecomLog {
 # Log header
 $logHeader = @()
 $logHeader += "===== VM Decommissioning Log ====="
+$logHeader += "VM: $vmName"
 $logHeader += "User: $env:USERNAME"
 $logHeader += "Ticket: $TicketNumber"
 $logHeader += "Log Start: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"

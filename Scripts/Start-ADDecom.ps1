@@ -123,7 +123,36 @@ if (-not (Test-Path $exportDir)) {
 }
 
 # Query AD for computer account and create initial log entry
-$adComp = Get-ADComputer -Identity $ComputerName -Properties * -ErrorAction SilentlyContinue
+# Use a Try/Catch to surface errors (connectivity, permissions) and
+# attempt a fallback Filter-based lookup if the Identity lookup fails.
+try {
+    $adComp = Get-ADComputer -Identity $ComputerName -Properties * -ErrorAction Stop
+}
+catch {
+    Write-Warning ("Get-ADComputer -Identity failed for '{0}': {1}" -f $ComputerName, $_.Exception.Message)
+
+    # Try identity with trailing '$' (common for computer sAMAccountName), then filter-based lookup
+    $adComp = $null
+    if ($ComputerName -notlike '*$') {
+        try {
+            $adComp = Get-ADComputer -Identity ($ComputerName + '$') -Properties * -ErrorAction Stop
+            Write-Verbose ("Fallback lookup using Identity with trailing '$' succeeded for '{0}$'" -f $ComputerName)
+        }
+        catch {
+            Write-Verbose ("Identity with trailing '$' lookup failed for '{0}$' : {1}" -f $ComputerName, $_.Exception.Message)
+        }
+    }
+
+    if (-not $adComp) {
+        try {
+            $adComp = Get-ADComputer -Filter "Name -eq '$ComputerName'" -Properties * -ErrorAction Stop
+            Write-Verbose ("Fallback lookup using -Filter succeeded for '{0}'" -f $ComputerName)
+        }
+    catch {
+        Write-Warning ("Fallback Get-ADComputer lookup also failed for '{0}': {1}" -f $ComputerName, $_.Exception.Message)
+        $adComp = $null
+    }
+}
 
 # Create export object with basic info even if computer not found
 $export = [PSCustomObject]@{
